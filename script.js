@@ -1,6 +1,6 @@
 /**
  * Faisal Aljaroshah — Minimalist Coming Soon
- * High-performance WebGL Fluid Aurora / Cosmic Silk Shader Engine
+ * Cosmic Silk Shader with Mobile Gyroscope Gravity Flow
  */
 
 (function () {
@@ -69,12 +69,13 @@
     }
   `;
 
-  // Fragment Shader: Fluid Domain-Warped Cosmic Silk
+  // Fragment Shader: Pure Cosmic Silk Fluid with Gravity-Driven Flow & Full-Bleed Glow
   const fsSource = `
     precision highp float;
     uniform vec2 u_resolution;
     uniform float u_time;
     uniform vec2 u_mouse;
+    uniform vec2 u_flow;
 
     // Simplex Noise 2D
     vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -104,7 +105,7 @@
       return 130.0 * dot(m, g);
     }
 
-    // 4-octave Fractional Brownian Motion
+    // 4-octave Fractional Brownian Motion (Exact 1112008)
     float fbm(vec2 p) {
       float v = 0.0;
       float a = 0.5;
@@ -126,22 +127,22 @@
       vec2 mouseShift = normalize(st - mouse + 0.0001) * exp(-dMouse * 3.2) * 0.22;
 
       vec2 p = st * 1.65 + mouseShift;
-      float t = u_time * 0.085;
 
-      // Double domain-warped fluid vectors
+      // Double domain-warped fluid vectors with gravity-driven flow direction
       vec2 q = vec2(
-        fbm(p + vec2(0.0, 0.0) + t * 0.28),
-        fbm(p + vec2(5.2, 1.3) + t * 0.22)
+        fbm(p + vec2(0.0, 0.0) + u_flow),
+        fbm(p + vec2(5.2, 1.3) + u_flow * 0.785)
       );
 
       vec2 r = vec2(
-        fbm(p + 2.8 * q + vec2(1.7, 9.2) + t * 0.35),
-        fbm(p + 2.8 * q + vec2(8.3, 2.8) + t * 0.28)
+        fbm(p + 2.8 * q + vec2(1.7, 9.2) + u_flow * 1.25),
+        fbm(p + 2.8 * q + vec2(8.3, 2.8) + u_flow)
       );
 
-      float f = fbm(p + 3.2 * r + t * 0.4);
+      // Internal fluid breathing pulsation (Exact 1112008 frequency)
+      float f = fbm(p + 3.2 * r + u_time * 0.034);
 
-      // Atmospheric Dark Palette
+      // Atmospheric Dark Palette (Exact 1112008)
       vec3 bgObsidian = vec3(0.012, 0.014, 0.020);
       vec3 colMidnight = vec3(0.03, 0.06, 0.16);
       vec3 colViolet   = vec3(0.24, 0.10, 0.48);
@@ -158,8 +159,10 @@
       // Soft mouse aura
       color += vec3(0.12, 0.35, 0.65) * exp(-dMouse * 2.8) * 0.28;
 
-      // Vignette effect to keep center clean & text razor-sharp
-      float vignette = 1.0 - smoothstep(0.45, 1.45, length(st * vec2(1.0, 1.15)));
+      // Normalized soft vignette: never crushes color to black on portrait/mobile screens
+      vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+      float dCenter = length(uv - 0.5) * 1.25;
+      float vignette = clamp(1.0 - smoothstep(0.5, 1.5, dCenter), 0.75, 1.0);
       color *= vignette;
 
       // Film grain dither to eliminate color banding
@@ -226,8 +229,9 @@
   const uResolution = gl.getUniformLocation(program, 'u_resolution');
   const uTime = gl.getUniformLocation(program, 'u_time');
   const uMouse = gl.getUniformLocation(program, 'u_mouse');
+  const uFlow = gl.getUniformLocation(program, 'u_flow');
 
-  // Mouse State with Smooth Lerp
+  // Mouse State with Smooth Lerp (Exact 1112008 logic)
   let mouseX = window.innerWidth * 0.5;
   let mouseY = window.innerHeight * 0.5;
   let targetMouseX = mouseX;
@@ -235,44 +239,134 @@
 
   window.addEventListener('mousemove', (e) => {
     targetMouseX = e.clientX;
-    targetMouseY = window.innerHeight - e.clientY; // Invert for GL coordinates
+    targetMouseY = window.innerHeight - e.clientY;
   });
 
   window.addEventListener('touchmove', (e) => {
-    if (e.touches.length > 0) {
+    if (e.touches && e.touches.length > 0) {
       targetMouseX = e.touches[0].clientX;
       targetMouseY = window.innerHeight - e.touches[0].clientY;
     }
   }, { passive: true });
 
-  // Handle Resize
+  // Mobile Gyroscope & Gravity Flow
+  let gx = 0;
+  let gy = 0;
+  let targetGx = 0;
+  let targetGy = 0;
+  let hasRealGyro = false;
+  let permissionRequested = false;
+
+  function handleOrientation(e) {
+    if (e.gamma == null || e.beta == null) return;
+    hasRealGyro = true;
+
+    // Convert degrees to radians
+    const radGamma = (e.gamma * Math.PI) / 180;
+    const radBeta = (e.beta * Math.PI) / 180;
+
+    // 2D Earth gravity vector projected onto the phone screen:
+    // Tilted right -> gamma > 0 -> targetGx > 0
+    // Held upright in hand (~70 deg) -> beta > 0 -> targetGy > 0 (downward gravity on screen)
+    targetGx = Math.sin(radGamma);
+    targetGy = Math.sin(radBeta);
+  }
+
+  function handleMotion(e) {
+    const acc = e.accelerationIncludingGravity;
+    if (!acc || acc.x == null || acc.y == null) return;
+    hasRealGyro = true;
+    // On device motion: -x is right tilt, -y is upright gravity
+    targetGx = -acc.x / 9.81;
+    targetGy = -acc.y / 9.81;
+  }
+
+  // Transparently enable motion sensors on user interaction (iOS 13+ requirement)
+  function requestMotionAccess() {
+    if (permissionRequested) return;
+    permissionRequested = true;
+
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then((state) => {
+          if (state === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  // Invisible user gesture trigger for iOS permission (no UI button needed)
+  ['click', 'touchend'].forEach((evt) => {
+    window.addEventListener(evt, requestMotionAccess, { once: true, passive: true });
+  });
+
+  // Listen immediately for Android, desktop browsers, or pre-granted sessions
+  window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+  window.addEventListener('deviceorientationabsolute', handleOrientation, { passive: true });
+  window.addEventListener('devicemotion', handleMotion, { passive: true });
+
+  // Handle Resize: Guarantees full-bleed coverage
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
 
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(resize, 100);
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resize);
+  }
   resize();
 
-  // Animation Loop
+  // Animation Loop: Flow accumulation driven by gravity
   let startTime = performance.now();
+  let lastFrameTime = startTime;
+  let flowX = 0;
+  let flowY = 0;
   let animId = null;
   let isRunning = true;
 
   function render(now) {
     if (!isRunning) return;
 
-    // Smooth mouse inertia
+    const dt = Math.min((now - lastFrameTime) * 0.001, 0.05);
+    lastFrameTime = now;
+
+    // Smooth mouse inertia (Exact 1112008 logic)
     mouseX += (targetMouseX * (canvas.width / window.innerWidth) - mouseX) * 0.045;
     mouseY += (targetMouseY * (canvas.height / window.innerHeight) - mouseY) * 0.045;
+
+    if (hasRealGyro) {
+      // Smoothly interpolate gravity direction
+      gx += (targetGx - gx) * 0.1;
+      gy += (targetGy - gy) * 0.1;
+
+      // Mobile gravity flow speed
+      const mobileFlowSpeed = 0.06;
+
+      // Tilting right (gx > 0) -> liquid flows to the right (flowX decreases)
+      // Holding upright (gy > 0) -> liquid flows downward (flowY increases)
+      flowX -= gx * mobileFlowSpeed * dt;
+      flowY += gy * mobileFlowSpeed * dt;
+    } else {
+      // Desktop PC: exact natural drift towards bottom-left corner (from commit 1112008)
+      const pcFlowSpeed = 0.085;
+      flowX += 0.28 * pcFlowSpeed * dt;
+      flowY += 0.22 * pcFlowSpeed * dt;
+    }
 
     const elapsedTime = (now - startTime) * 0.001;
 
     gl.uniform2f(uResolution, canvas.width, canvas.height);
     gl.uniform1f(uTime, elapsedTime);
     gl.uniform2f(uMouse, mouseX, mouseY);
+    gl.uniform2f(uFlow, flowX, flowY);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -286,7 +380,7 @@
       if (animId) cancelAnimationFrame(animId);
     } else {
       isRunning = true;
-      startTime = performance.now();
+      lastFrameTime = performance.now();
       animId = requestAnimationFrame(render);
     }
   });

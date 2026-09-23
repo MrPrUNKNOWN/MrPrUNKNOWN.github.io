@@ -21,46 +21,58 @@
 html, body {
   width: 100%;
   height: 100%;
+  margin: 0;
+  padding: 0;
   background-color: var(--bg-color);
   color: var(--text-main);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
-  position: relative;
+  overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Background Canvas */
+/* Background Canvas — 100% Full Bleed, truly edge-to-edge covering notch & home indicator */
 #webgl-canvas {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
 }
 
-/* Site Layout Structure */
+/* Site Layout Structure — Safe area applies ONLY to text padding, never background */
 .site-container {
   position: relative;
   z-index: 10;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   height: 100dvh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 3rem 3.5rem;
+  padding: 2.5rem 3rem;
+  padding-top: max(2rem, env(safe-area-inset-top));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-left: max(2.5rem, env(safe-area-inset-left));
+  padding-right: max(2.5rem, env(safe-area-inset-right));
   max-width: 1440px;
   margin: 0 auto;
 }
 
 @media (max-width: 768px) {
   .site-container {
-    padding: 2rem 1.75rem;
+    padding: 1.5rem 1.25rem;
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
   }
 }
 
@@ -70,6 +82,7 @@ html, body {
 .site-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   font-family: var(--font-mono);
   font-size: 0.85rem;
   letter-spacing: 0.05em;
