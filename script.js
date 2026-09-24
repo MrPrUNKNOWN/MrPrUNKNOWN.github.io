@@ -62,11 +62,20 @@
   const canvas = document.getElementById('webgl-canvas');
   if (!canvas) return;
 
-  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  const contextOpts = {
+    alpha: false,
+    premultipliedAlpha: false,
+    antialias: false,
+    powerPreference: 'high-performance'
+  };
+  const gl = canvas.getContext('webgl', contextOpts) || canvas.getContext('experimental-webgl', contextOpts);
   if (!gl) {
     init2DFallback();
     return;
   }
+
+  gl.clearColor(0.012, 0.014, 0.020, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
 
   // Vertex Shader: Fullscreen Quad
   const vsSource = `
@@ -238,21 +247,37 @@
   const uMouse = gl.getUniformLocation(program, 'u_mouse');
   const uFlow = gl.getUniformLocation(program, 'u_flow');
 
-  // Mouse State with Smooth Lerp (Exact 1112008 logic)
-  let mouseX = window.innerWidth * 0.5;
-  let mouseY = window.innerHeight * 0.5;
-  let targetMouseX = mouseX;
-  let targetMouseY = mouseY;
+  // Mouse & Touch State with Smooth Lerp (Reactive to Canvas Dimensions)
+  let mouseX = 0;
+  let mouseY = 0;
+  let targetMouseX = 0;
+  let targetMouseY = 0;
+  let hasPointerMoved = false;
+
+  function updatePointer(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const x = (clientX - rect.left) / rect.width;
+      const y = (clientY - rect.top) / rect.height;
+      targetMouseX = x * canvas.width;
+      targetMouseY = (1.0 - y) * canvas.height;
+      hasPointerMoved = true;
+    }
+  }
 
   window.addEventListener('mousemove', (e) => {
-    targetMouseX = e.clientX;
-    targetMouseY = window.innerHeight - e.clientY;
+    updatePointer(e.clientX, e.clientY);
   });
+
+  window.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
     if (e.touches && e.touches.length > 0) {
-      targetMouseX = e.touches[0].clientX;
-      targetMouseY = window.innerHeight - e.touches[0].clientY;
+      updatePointer(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, { passive: true });
 
@@ -314,25 +339,32 @@
   window.addEventListener('deviceorientationabsolute', handleOrientation, { passive: true });
   window.addEventListener('devicemotion', handleMotion, { passive: true });
 
-  // Handle Resize: Guarantees true full-bleed edge-to-edge coverage across notch and home indicator
+  // Real Rendered Size Resizing (Requirement 2)
   function resize() {
+    const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    // Measure rendered element dimensions first (guarantees pixel-perfect full bleed)
-    const w = canvas.clientWidth || (window.visualViewport ? window.visualViewport.width : window.innerWidth);
-    const h = canvas.clientHeight || (window.visualViewport ? window.visualViewport.height : window.innerHeight);
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(uResolution, canvas.width, canvas.height);
+
+    if (!hasPointerMoved) {
+      targetMouseX = canvas.width * 0.5;
+      targetMouseY = canvas.height * 0.5;
+      mouseX = targetMouseX;
+      mouseY = targetMouseY;
+    }
   }
 
+  resize();
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => {
+    resize();
     setTimeout(resize, 120);
   });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', resize);
   }
-  resize();
 
   // Prevent iOS Safari elastic rubber-banding bounce on background touch that reveals black bars
   document.addEventListener('touchmove', (e) => {
@@ -355,9 +387,9 @@
     const dt = Math.min((now - lastFrameTime) * 0.001, 0.05);
     lastFrameTime = now;
 
-    // Smooth mouse inertia (Exact 1112008 logic)
-    mouseX += (targetMouseX * (canvas.width / window.innerWidth) - mouseX) * 0.045;
-    mouseY += (targetMouseY * (canvas.height / window.innerHeight) - mouseY) * 0.045;
+    // Smooth mouse inertia (reactive to canvas real dimensions)
+    mouseX += (targetMouseX - mouseX) * 0.045;
+    mouseY += (targetMouseY - mouseY) * 0.045;
 
     if (hasRealGyro) {
       // Smoothly interpolate gravity direction
@@ -380,6 +412,7 @@
 
     const elapsedTime = (now - startTime) * 0.001;
 
+    gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(uResolution, canvas.width, canvas.height);
     gl.uniform1f(uTime, elapsedTime);
     gl.uniform2f(uMouse, mouseX, mouseY);
@@ -412,8 +445,10 @@
     if (!ctx) return;
 
     function draw2D() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
       const grad = ctx.createRadialGradient(
         canvas.width * 0.5, canvas.height * 0.3, 50,
         canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.8
@@ -427,6 +462,68 @@
 
     draw2D();
     window.addEventListener('resize', draw2D);
+    window.addEventListener('orientationchange', () => {
+      draw2D();
+      setTimeout(draw2D, 120);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', draw2D);
+    }
   }
+
+  // --- TEMPORARY DIAGNOSTIC OVERLAY (Requirement 7 - remove afterwards) ---
+  const diagBox = document.createElement('div');
+  diagBox.id = 'debug-diagnostic-overlay';
+  diagBox.style.cssText = [
+    'position: fixed',
+    'top: max(8px, env(safe-area-inset-top, 8px))',
+    'right: max(8px, env(safe-area-inset-right, 8px))',
+    'z-index: 999999',
+    'background: rgba(0, 0, 0, 0.88)',
+    'border: 1px solid rgba(0, 255, 128, 0.7)',
+    'color: #00ff88',
+    'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    'font-size: 10px',
+    'line-height: 1.4',
+    'padding: 6px 8px',
+    'border-radius: 5px',
+    'pointer-events: none',
+    'white-space: pre',
+    'box-shadow: 0 4px 16px rgba(0,0,0,0.6)'
+  ].join(';');
+  document.body.appendChild(diagBox);
+
+  // Hidden probe element for computing safe-area insets in px
+  const safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;';
+  document.body.appendChild(safeProbe);
+
+  function updateDiagnostic() {
+    const rect = canvas.getBoundingClientRect();
+    const probeStyle = window.getComputedStyle(safeProbe);
+    const safeTop = probeStyle.paddingTop;
+    const safeBottom = probeStyle.paddingBottom;
+    const vv = window.visualViewport;
+    const vvH = vv ? `${Math.round(vv.height)}` : 'N/A';
+
+    diagBox.textContent = [
+      `[DIAGNOSTIC]`,
+      `window: ${window.innerWidth} x ${window.innerHeight}`,
+      `documentElement: clientH=${document.documentElement.clientHeight}`,
+      `screen: height=${window.screen.height}`,
+      `visualViewport: height=${vvH}`,
+      `canvas.rect: ${Math.round(rect.width)}x${Math.round(rect.height)} (t:${Math.round(rect.top)}, b:${Math.round(rect.bottom)})`,
+      `canvas.buffer: ${canvas.width}x${canvas.height}`,
+      `safe-area: top=${safeTop}, btm=${safeBottom}`
+    ].join('\n');
+  }
+
+  updateDiagnostic();
+  window.addEventListener('resize', updateDiagnostic);
+  window.addEventListener('orientationchange', () => setTimeout(updateDiagnostic, 150));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateDiagnostic);
+  }
+  setInterval(updateDiagnostic, 500);
 
 })();
