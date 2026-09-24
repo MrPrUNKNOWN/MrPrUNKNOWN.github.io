@@ -366,12 +366,7 @@
     window.visualViewport.addEventListener('resize', resize);
   }
 
-  // Prevent iOS Safari elastic rubber-banding bounce on background touch that reveals black bars
-  document.addEventListener('touchmove', (e) => {
-    if (e.target === canvas || e.target === document.body || e.target === document.documentElement) {
-      e.preventDefault();
-    }
-  }, { passive: false });
+
 
   // Animation Loop: Flow accumulation driven by gravity
   let startTime = performance.now();
