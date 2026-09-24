@@ -4,7 +4,7 @@
    ========================================================================== */
 
 :root {
-  --bg-color: #030305;
+  --bg-color: #05070d;
   --text-main: #ffffff;
   --text-muted: rgba(255, 255, 255, 0.78);
   --text-dim: rgba(255, 255, 255, 0.42);
@@ -18,11 +18,28 @@
   padding: 0;
 }
 
-html, body {
+html {
   width: 100%;
   height: 100%;
+  height: -webkit-fill-available;
   margin: 0;
   padding: 0;
+  background-color: var(--bg-color);
+  color-scheme: dark;
+  overflow: hidden;
+}
+
+body {
+  width: 100%;
+  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  margin: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background-color: var(--bg-color);
   color: var(--text-main);
   font-family: var(--font-sans);
@@ -32,36 +49,39 @@ html, body {
   overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
 /* Background Canvas — 100% Full Bleed, truly edge-to-edge covering notch & home indicator */
 #webgl-canvas {
   position: fixed;
+  inset: 0;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  background-color: var(--bg-color);
   z-index: 0;
   pointer-events: none;
+  touch-action: none;
+  display: block;
 }
 
-/* Site Layout Structure — Safe area applies ONLY to text padding, never background */
+/* Site Layout Structure */
 .site-container {
   position: relative;
   z-index: 10;
   width: 100%;
   height: 100%;
+  height: 100vh;
   height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 2.5rem 3rem;
-  padding-top: max(2rem, env(safe-area-inset-top));
-  padding-bottom: max(2rem, env(safe-area-inset-bottom));
-  padding-left: max(2.5rem, env(safe-area-inset-left));
-  padding-right: max(2.5rem, env(safe-area-inset-right));
   max-width: 1440px;
   margin: 0 auto;
 }
@@ -69,10 +89,6 @@ html, body {
 @media (max-width: 768px) {
   .site-container {
     padding: 1.5rem 1.25rem;
-    padding-top: max(1.5rem, env(safe-area-inset-top));
-    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
-    padding-left: max(1.25rem, env(safe-area-inset-left));
-    padding-right: max(1.25rem, env(safe-area-inset-right));
   }
 }
 
@@ -110,6 +126,7 @@ html, body {
   align-items: center;
   justify-content: flex-start;
   padding: 1.5rem 0;
+  width: 100%;
 }
 
 .content-block {
@@ -128,12 +145,13 @@ html, body {
 }
 
 .person-name {
-  font-size: clamp(2.5rem, 6.5vw, 5.5rem);
+  font-size: clamp(2.5rem, 6.8vw, 5.6rem);
   font-weight: 700;
   letter-spacing: -0.045em;
   color: #ffffff;
   text-shadow: 0 4px 28px rgba(0, 0, 0, 0.6);
   text-rendering: optimizeLegibility;
+  white-space: nowrap;
 }
 
 .coming-soon-big {
@@ -142,6 +160,7 @@ html, body {
   letter-spacing: -0.04em;
   color: rgba(255, 255, 255, 0.42);
   text-shadow: 0 4px 28px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -207,12 +226,13 @@ html, body {
 }
 
 /* ==========================================================================
-   Minimal Toast Notification
+   Minimal Toast Notification — Hidden by default to prevent iOS Safari edge sampler bug
    ========================================================================== */
 .toast {
+  display: none;
   position: fixed;
-  bottom: 2.5rem;
-  right: 2.5rem;
+  bottom: max(2.5rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)));
+  right: max(2.5rem, calc(1.5rem + env(safe-area-inset-right, 0px)));
   background: rgba(15, 18, 24, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(20px);
@@ -227,10 +247,11 @@ html, body {
   pointer-events: none;
   opacity: 0;
   transform: translateY(10px);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .toast.show {
+  display: block;
   opacity: 1;
   transform: translateY(0);
 }

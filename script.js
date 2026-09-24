@@ -16,10 +16,17 @@
   function showToast(text) {
     if (!toast) return;
     toast.textContent = text;
+    toast.style.display = 'block';
+    void toast.offsetWidth;
     toast.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       toast.classList.remove('show');
+      setTimeout(() => {
+        if (!toast.classList.contains('show')) {
+          toast.style.display = 'none';
+        }
+      }, 260);
     }, 2400);
   }
 
@@ -307,22 +314,32 @@
   window.addEventListener('deviceorientationabsolute', handleOrientation, { passive: true });
   window.addEventListener('devicemotion', handleMotion, { passive: true });
 
-  // Handle Resize: Guarantees full-bleed coverage
+  // Handle Resize: Guarantees true full-bleed edge-to-edge coverage across notch and home indicator
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(window.innerWidth * dpr);
-    canvas.height = Math.round(window.innerHeight * dpr);
+    // Measure rendered element dimensions first (guarantees pixel-perfect full bleed)
+    const w = canvas.clientWidth || (window.visualViewport ? window.visualViewport.width : window.innerWidth);
+    const h = canvas.clientHeight || (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
 
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => {
-    setTimeout(resize, 100);
+    setTimeout(resize, 120);
   });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', resize);
   }
   resize();
+
+  // Prevent iOS Safari elastic rubber-banding bounce on background touch that reveals black bars
+  document.addEventListener('touchmove', (e) => {
+    if (e.target === canvas || e.target === document.body || e.target === document.documentElement) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
   // Animation Loop: Flow accumulation driven by gravity
   let startTime = performance.now();
@@ -386,6 +403,8 @@
   });
 
   animId = requestAnimationFrame(render);
+
+
 
   // 2D Canvas Fallback in case WebGL is blocked
   function init2DFallback() {
