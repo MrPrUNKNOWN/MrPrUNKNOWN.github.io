@@ -55,6 +55,16 @@ body {
   pointer-events: none;
 }
 
+/* iOS Safari Full-Bleed Overscan to cover under Dynamic Island / Status Bar & Bottom Toolbar */
+@supports (-webkit-touch-callout: none) {
+  #webgl-canvas {
+    top: -120px;
+    bottom: -120px;
+    height: calc(100lvh + 240px);
+    min-height: calc(100vh + 240px);
+  }
+}
+
 /* Site Layout Structure */
 .site-container {
   position: relative;
