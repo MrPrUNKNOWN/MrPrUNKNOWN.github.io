@@ -18,18 +18,17 @@
   padding: 0;
 }
 
-/* DIAGNOSTIC (temporary per Step 7): red background reveals whether bars belong to HTML or Safari chrome */
 html {
   margin: 0;
   padding: 0;
-  background: red; /* DIAGNOSTIC: fallback is #05070d */
+  background-color: var(--bg-color);
   color-scheme: dark;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background: transparent; /* DIAGNOSTIC: transparent so html's red diagnostic shows if any bars appear. Revert to #05070d later */
+  background-color: var(--bg-color);
   color: var(--text-main);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
